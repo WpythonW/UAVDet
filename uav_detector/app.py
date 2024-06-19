@@ -1,7 +1,7 @@
 import streamlit as st
 import os, zipfile, io
 from ultralytics import YOLO
-from VideoProcessor import MediaProcessor, process_media
+from VideoProcessor import MediaProcessor
 import pandas as pd
 
 # Папки для хранения метаданных, обработанных и загруженных файлов, а также моделей
@@ -9,6 +9,8 @@ metadata_folder = 'uav_detector/metadata'
 processed_files_folder = 'uav_detector/processed_files'
 uploaded_files_folder = 'uav_detector/uploaded_files'
 model_folder = 'uav_detector/models'
+video_extensions = ('.mp4', '.mov')
+image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.heic', '.heif', '.webp')
 
 # Функция для создания папок для загрузки и обработки файлов
 def create_folders(upload_folder=uploaded_files_folder, processed_folder=processed_files_folder):
@@ -32,12 +34,11 @@ def zip_files(metadata_folder, file_paths):
             # Получаем базовое имя файла без расширения и добавляем .csv или .txt
             splited = os.path.splitext(os.path.basename(file_path))
             pure_name, extension = splited[0], splited[1]
-            if extension == '.mp4': 
+            if extension in video_extensions: 
                 metadata_extension = '.csv'
             else: 
                 metadata_extension = '.txt'
             full_path = os.path.join(metadata_folder, pure_name + metadata_extension)
-            print(full_path)
             zipf.write(full_path, arcname=pure_name + metadata_extension)
     zip_buffer.seek(0)
     return zip_buffer
@@ -45,7 +46,7 @@ def zip_files(metadata_folder, file_paths):
 # Функция для отображения файлов с центровкой
 def display_file(selected_file, folder_name=processed_files_folder):
     file_path = os.path.join(folder_name, selected_file)
-    if selected_file.endswith('.mp4'):
+    if selected_file.endswith(video_extensions):
         print(file_path)
         st.video(file_path)
     else:
@@ -78,7 +79,7 @@ def main(processor):
             input_paths.append(file_path)
         if input_paths:
             st.toast(f"Файлы загружены", icon="🟢")
-            imgs, vids = process_media(input_paths, processor)
+            imgs, vids = processor.process_media(input_paths, processor)
             new_variants = [os.path.basename(i) for i in imgs + vids]
             st.session_state.variants.extend(new_variants)
             st.toast(f"Файлы обработаны", icon="🟢")
@@ -89,9 +90,10 @@ def main(processor):
     st.session_state.variants = list(set(st.session_state.variants))
 
     # Контейнер для выпадающего меню и кнопки скачивания
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([5, 1])
     with col1:
         selected_file = st.selectbox("Выберите файл", st.session_state.variants, label_visibility='collapsed')
+        print(selected_file)
     with col2:
         zip_buffer = zip_files(metadata_folder, st.session_state.variants)
         st.download_button(
@@ -121,6 +123,10 @@ def main(processor):
 # Запуск приложения
 if __name__ == "__main__":
     model_path = f'{model_folder}/yolo8m_last.pt'  # Укажите путь к модели
-    processor = MediaProcessor(processed_files_folder, model_path, metadata_path=metadata_folder, batch_size=16)
+    processor = MediaProcessor(model_path=model_path, 
+                               output_folder=processed_files_folder, 
+                               metadata_path=metadata_folder,
+                               image_extensions=image_extensions,
+                               video_extensions=video_extensions)
 
     main(processor)
